@@ -1,0 +1,38 @@
+rules_version = '2';
+
+// Work Clock security rules.
+// Anyone with the link can read the board and clock in/out (no sign-in),
+// but saves must have the right shape, and logged sessions can't be
+// edited or deleted from the website — only from the Firebase console.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // One document per person whose clock is currently running or paused.
+    match /active/{user} {
+      allow read: if true;
+      allow create, update: if
+        request.resource.data.keys().hasOnly(['name', 'title', 'sessionStart', 'accMs', 'runningSince', 'pausedAt'])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 40
+        && request.resource.data.title is string && request.resource.data.title.size() <= 80
+        && request.resource.data.sessionStart is number
+        && request.resource.data.accMs is number;
+      allow delete: if true;
+    }
+
+    // Finished work sessions (the Work Log).
+    match /sessions/{id} {
+      allow read: if true;
+      allow create: if
+        request.resource.data.keys().hasOnly(['user', 'name', 'title', 'date', 'start', 'end', 'workedMs', 'breakMs'])
+        && request.resource.data.user is string && request.resource.data.user.size() <= 64
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 40
+        && request.resource.data.title is string && request.resource.data.title.size() <= 80
+        && request.resource.data.date is string
+        && request.resource.data.start is number
+        && request.resource.data.end is number
+        && request.resource.data.workedMs is number && request.resource.data.workedMs >= 0
+        && request.resource.data.breakMs is number;
+      allow update, delete: if false;
+    }
+  }
+}

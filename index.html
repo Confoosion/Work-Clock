@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Work Clock</title>
+<script>
+  (function(){var t=null;try{t=JSON.parse(localStorage.getItem("wc.theme"))}catch(e){}
+  if(t!=="dark"&&t!=="light")t=window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";
+  document.documentElement.setAttribute("data-theme",t);})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f4f1ea; --card:#fffdf8; --ink:#1d1b17; --muted:#6f6a60; --line:#e3ddd0;
+    --run:#1f8a5b; --run-soft:#dff1e7; --pause:#c27a12; --pause-soft:#f8ecd6;
+    --danger:#b3392f; --shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(40,30,10,.06);
+  }
+  :root[data-theme=dark]{
+    color-scheme:dark;
+      --bg:#14130f; --card:#1d1b17; --ink:#f1ece2; --muted:#a39d90; --line:#302d27;
+      --run:#3fbf86; --run-soft:#173326; --pause:#e3a03c; --pause-soft:#3a2c14;
+      --danger:#e0675c; --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);font-family:"Space Grotesk",system-ui,sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased}
+  button{font:inherit;cursor:pointer}
+  .wrap{max-width:760px;margin:0 auto;padding:28px 20px 60px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:28px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;letter-spacing:-.01em}
+  .brand svg{width:22px;height:22px}
+  .who{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--muted)}
+  .who b{color:var(--ink);font-weight:600}
+  .link{background:none;border:1px solid var(--line);color:var(--ink);padding:6px 12px;border-radius:999px;font-size:13px}
+  .link:hover{border-color:var(--muted)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow)}
+  .hidden{display:none !important}
+
+  /* Login */
+  .login{max-width:400px;margin:10vh auto 0;padding:32px}
+  .login h1{margin:0 0 6px;font-size:28px;letter-spacing:-.02em}
+  .login p{margin:0 0 22px;color:var(--muted);font-size:15px;line-height:1.5}
+  label{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+  input[type=text]{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;font-size:16px;outline:none}
+  input[type=text]:focus{border-color:var(--ink)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 20px;border-radius:12px;border:1px solid transparent;font-weight:600;font-size:15px}
+  .btn-primary{background:var(--ink);color:var(--card)}
+  .btn-primary:hover{opacity:.9}
+  .btn-ghost{background:transparent;border-color:var(--line);color:var(--ink)}
+  .btn-ghost:hover{border-color:var(--muted)}
+  .btn-stop{background:var(--danger);color:#fff}
+  .btn-stop:hover{opacity:.92}
+  .btn[disabled]{opacity:.5;cursor:default}
+  .login .btn{width:100%;margin-top:14px}
+  .err{color:var(--danger);font-size:13px;margin-top:10px;min-height:1em}
+
+  /* Clock */
+  .clock-card{padding:36px 24px 30px;text-align:center}
+  .clock{position:relative;width:260px;height:260px;margin:0 auto;border-radius:50%;border:none;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;transition:transform .12s ease, background .2s ease;box-shadow:inset 0 0 0 10px var(--line)}
+  .clock:hover{transform:scale(1.015)}
+  .clock:active{transform:scale(.985)}
+  .clock:focus-visible{outline:3px solid var(--ink);outline-offset:6px}
+  .clock[disabled]{cursor:wait}
+  .clock .time{font-family:"JetBrains Mono",ui-monospace,monospace;font-weight:700;font-size:44px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .clock .cta{font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+  .clock.running{background:var(--run-soft);box-shadow:inset 0 0 0 10px var(--run)}
+  .clock.running .cta{color:var(--run)}
+  .clock.paused{background:var(--pause-soft);box-shadow:inset 0 0 0 10px var(--pause)}
+  .clock.paused .cta{color:var(--pause)}
+  .clock.running::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid var(--run);opacity:.0;animation:pulse 2s ease-out infinite}
+  @keyframes pulse{0%{transform:scale(.96);opacity:.5}100%{transform:scale(1.08);opacity:0}}
+  @media (prefers-reduced-motion:reduce){.clock.running::after{animation:none}}
+  .status{margin:22px 0 0;font-size:15px;color:var(--muted);min-height:22px}
+  .status b{color:var(--ink)}
+  .actions{display:flex;gap:10px;justify-content:center;margin-top:18px;flex-wrap:wrap}
+
+  .hright{display:flex;align-items:center;gap:10px}
+  .icon-btn{width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink)}
+  .icon-btn:hover{border-color:var(--muted)}
+  .icon-btn svg{width:17px;height:17px}
+  .controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+  .seg{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:3px}
+  .seg button{border:none;background:transparent;color:var(--muted);padding:5px 12px;border-radius:999px;font-size:13px;font-weight:600}
+  .seg button[aria-pressed=true]{background:var(--ink);color:var(--card)}
+  select{font:inherit;font-size:13px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+  .meta{font-size:13px;color:var(--muted);margin:-4px 4px 10px}
+  .hidden-note{font-size:13px;color:var(--muted);padding:2px 4px 6px}
+  .feed-row{grid-template-columns:auto 1fr auto}
+  .feed-row .avatar{width:30px;height:30px;font-size:13px}
+  .who-line{font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .who-line .tag{font-size:11px;padding:2px 8px}
+  .feed-row.live .tag{background:var(--run-soft);border-color:var(--run);color:var(--run)}
+  .feed-row.live.paused .tag{background:var(--pause-soft);border-color:var(--pause);color:var(--pause)}
+  .feed-row.live .avatar{border-color:var(--run);background:var(--run-soft);color:var(--run)}
+  .feed-row.live.paused .avatar{border-color:var(--pause);background:var(--pause-soft);color:var(--pause)}
+  .linkish{background:none;border:none;padding:0;color:inherit;font:inherit;font-weight:600;cursor:pointer}
+  .linkish:hover{text-decoration:underline}
+  @media (max-width:480px){ .log-head{flex-direction:column;align-items:flex-start;gap:8px} .controls{justify-content:flex-start} }
+
+  .title-wrap{max-width:420px;margin:0 auto 26px;text-align:left}
+  .title-wrap label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+  #title{text-align:center;font-weight:600}
+  .title-hint{font-size:12px;color:var(--muted);text-align:center;margin-top:6px;min-height:1em}
+  .stitle{font-weight:600;font-size:15px;line-height:1.3;word-break:break-word}
+  .stitle.untitled{color:var(--muted);font-weight:500;font-style:italic}
+  .pstitle{font-size:13px;margin-top:1px;word-break:break-word}
+  .overlay{position:fixed;inset:0;background:rgba(10,8,4,.45);display:flex;align-items:center;justify-content:center;padding:20px;z-index:10}
+  .modal{width:100%;max-width:420px;padding:26px}
+  .modal h3{margin:0 0 6px;font-size:20px;letter-spacing:-.01em}
+  .modal p{margin:0 0 16px;color:var(--muted);font-size:14px;line-height:1.5}
+  .modal .row{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
+
+  /* Team */
+  .team{padding:18px 20px}
+  .person{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+  .person:first-child{border-top:none}
+  .avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;background:var(--bg);border:2px solid var(--line)}
+  .person.running .avatar{border-color:var(--run);background:var(--run-soft);color:var(--run)}
+  .person.paused .avatar{border-color:var(--pause);background:var(--pause-soft);color:var(--pause)}
+  .pname{font-weight:600;font-size:15px}
+  .pname small{font-weight:400;color:var(--muted)}
+  .pstate{font-size:12px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:6px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+  .person.running .dot{background:var(--run)}
+  .person.paused .dot{background:var(--pause)}
+
+  /* Log */
+  .log-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:36px 4px 12px}
+  .log-head h2{margin:0;font-size:20px;letter-spacing:-.01em}
+  .log-head span{font-size:13px;color:var(--muted)}
+  .day{padding:18px 20px;margin-bottom:12px}
+  .day-title{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px}
+  .day-title h3{margin:0;font-size:16px}
+  .day-title .count{font-size:13px;color:var(--muted)}
+  .sess{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:14px;padding:12px 0;border-top:1px solid var(--line)}
+  .sess:first-of-type{border-top:none}
+  .tag{font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--bg);border:1px solid var(--line);white-space:nowrap}
+  .range{font-size:14px}
+  .range small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+  .dur{font-family:"JetBrains Mono",ui-monospace,monospace;font-weight:700;font-size:17px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .live .tag{background:var(--run-soft);border-color:var(--run);color:var(--run)}
+  .live.paused .tag{background:var(--pause-soft);border-color:var(--pause);color:var(--pause)}
+  .empty{padding:28px 20px;text-align:center;color:var(--muted);font-size:15px}
+  .note{font-size:12px;color:var(--muted);text-align:center;margin-top:26px}
+  .banner{background:var(--pause-soft);color:var(--ink);border:1px solid var(--pause);border-radius:12px;padding:10px 14px;font-size:13px;margin-bottom:16px}
+  @media (max-width:480px){
+    .clock{width:220px;height:220px}
+    .clock .time{font-size:36px}
+    .sess{grid-template-columns:1fr auto}
+    .sess .tag{grid-column:1/-1;justify-self:start}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/><path d="M9 2h6"/></svg>
+      Work Clock
+    </div>
+    <div class="hright">
+      <div class="who hidden" id="who">Signed in as <b id="whoName"></b><button class="link" id="logout">Log out</button></div>
+      <button class="icon-btn" id="themeBtn" aria-label="Toggle dark mode" title="Toggle dark mode"></button>
+    </div>
+  </header>
+
+  <div id="banner" class="banner hidden"></div>
+
+  <!-- Login -->
+  <form class="card login" id="loginView" autocomplete="off">
+    <h1>Clock in</h1>
+    <p>Enter your username to open your clock and see your logged hours.</p>
+    <label for="username">Username</label>
+    <input type="text" id="username" maxlength="40" placeholder="e.g. jake" autofocus>
+    <button class="btn btn-primary" type="submit" id="loginBtn">Log in</button>
+    <div class="err" id="loginErr"></div>
+  </form>
+
+  <!-- App -->
+  <main id="appView" class="hidden">
+    <section class="card clock-card">
+      <div class="title-wrap">
+        <label for="title">Work session</label>
+        <input type="text" id="title" maxlength="80" placeholder="Name this work session" autocomplete="off">
+        <div class="title-hint" id="titleHint"></div>
+      </div>
+      <button class="clock" id="clock" aria-live="polite">
+        <span class="time" id="time">0:00:00</span>
+        <span class="cta" id="cta">Start working</span>
+      </button>
+      <p class="status" id="status">Click the clock to start working.</p>
+      <div class="actions hidden" id="pausedActions">
+        <button class="btn btn-ghost" id="resumeBtn">Start again</button>
+        <button class="btn btn-stop" id="stopBtn">Stop Working</button>
+      </div>
+      <div class="err" id="appErr"></div>
+    </section>
+
+    <div class="log-head">
+      <h2>Clocked in now</h2>
+      <div class="controls"><select id="teamSort" aria-label="Sort"><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="longest">Longest</option><option value="shortest">Shortest</option></select><div class="seg" role="group" aria-label="Filter" data-seg="team">
+          <button data-v="me">Me</button><button data-v="everyone">Everyone</button><button data-v="hide">Hide</button>
+        </div></div>
+    </div>
+    <div class="meta" id="teamMeta"></div>
+    <div id="team"><div class="card empty">Checking who's working…</div></div>
+
+    <div class="log-head">
+      <h2>Work log</h2>
+      <div class="controls">
+        <select id="personSel" class="hidden" aria-label="Show one person"></select>
+        <select id="logSort" aria-label="Sort"><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="longest">Longest</option><option value="shortest">Shortest</option></select>
+        <div class="seg" role="group" aria-label="Filter" data-seg="log">
+          <button data-v="me">Me</button><button data-v="everyone">Everyone</button><button data-v="hide">Hide</button>
+        </div>
+      </div>
+    </div>
+    <div class="meta" id="logMeta"></div>
+    <div id="log"><div class="card empty">Loading your sessions…</div></div>
+    <p class="note" id="storageNote"></p>
+  </main>
+</div>
+
+<!-- ============ FIREBASE SETTINGS ============
+     Replace this block with the firebaseConfig from your Firebase project
+     (Project settings → General → Your apps → Web app). See README.md. -->
+<script>
+  window.FIREBASE_CONFIG = {
+    apiKey: "AIzaSyBnre71FQ9Xh8BCKfdzCTrha9rHSU2OmrY",
+    authDomain: "work-clock-6fd31.firebaseapp.com",
+    projectId: "work-clock-6fd31",
+    storageBucket: "work-clock-6fd31.firebasestorage.app",
+    messagingSenderId: "694797967349",
+    appId: "1:694797967349:web:00d63aa33e1823790e0abc"
+  };
+</script>
+<!-- ============================================ -->
+
+<div class="overlay hidden" id="nameDlg" role="dialog" aria-modal="true" aria-labelledby="nameDlgTitle">
+  <form class="card modal" id="nameForm" autocomplete="off">
+    <h3 id="nameDlgTitle">Name your work session</h3>
+    <p>Give this session a title before the clock starts.</p>
+    <input type="text" id="nameInput" maxlength="80" placeholder="What are you working on?">
+    <div class="err" id="nameErr"></div>
+    <div class="row">
+      <button type="button" class="btn btn-ghost" id="nameCancel">Cancel</button>
+      <button type="submit" class="btn btn-primary">Start clock</button>
+    </div>
+  </form>
+</div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+
+  /* ---------- helpers ---------- */
+  const pad = (n) => String(n).padStart(2, "0");
+  const dayKey = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+  const clockFmt = (ms) => { const s = Math.max(0, Math.floor(ms/1000)); return `${Math.floor(s/3600)}:${pad(Math.floor(s/60)%60)}:${pad(s%60)}`; };
+  const durFmt = (ms) => {
+    const s = Math.max(0, Math.floor(ms/1000)); const h = Math.floor(s/3600), m = Math.floor(s/60)%60;
+    if (h) return `${h}h ${pad(m)}m`; if (m) return `${m}m ${pad(s%60)}s`; return `${s}s`;
+  };
+  const timeFmt = (ms) => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const dayLabel = (key) => {
+    const [y, mo, d] = key.split("-").map(Number); const dt = new Date(y, mo-1, d);
+    const today = dayKey(Date.now()), yest = dayKey(Date.now() - 864e5);
+    const full = dt.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric", year: dt.getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
+    return key === today ? `Today · ${full}` : key === yest ? `Yesterday · ${full}` : full;
+  };
+  const userKey = (name) => "u_" + name.trim().toLowerCase().replace(/[^a-z0-9_\-~:@+]/g, "_").slice(0, 60);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  const LS = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+    del(k) { try { localStorage.removeItem(k); } catch {} },
+  };
+  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+
+  /* ---------- storage adapters ---------- */
+  function localStore() {
+    const subs = new Set(); const emit = () => subs.forEach((f) => f());
+    const watch = (fn) => { subs.add(fn); fn(); return () => subs.delete(fn); };
+    return {
+      kind: "local",
+      watchActive: (key, cb) => watch(() => cb(LS.get("wc.active." + key, null), true)),
+      saveActive: async (key, v) => { LS.set("wc.active." + key, v); emit(); },
+      clearActive: async (key) => { LS.del("wc.active." + key); emit(); },
+      addSession: async (s) => { const all = LS.get("wc.sessions", []); all.push({ id: uid(), ...s }); LS.set("wc.sessions", all); emit(); },
+      watchSessions: (cb) => watch(() => cb(LS.get("wc.sessions", []), true)),
+      watchAllActive: (cb) => watch(() => {
+        const out = [];
+        try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i);
+          if (k && k.startsWith("wc.active.")) { const v = LS.get(k, null); if (v) out.push({ key: k.slice(10), ...v }); } } } catch {}
+        cb(out, true);
+      }),
+      refresh: emit,
+    };
+  }
+  const FB = "https://www.gstatic.com/firebasejs/10.14.1/";
+  function firestoreStore(fs, db) {
+    const { doc, collection, query, orderBy, limit, onSnapshot, setDoc, deleteDoc, addDoc } = fs;
+    return {
+      kind: "db",
+      watchActive: (key, cb, err) => onSnapshot(doc(db, "active", key), (s) => cb(s.exists() ? s.data() : null, !s.metadata.fromCache), err),
+      saveActive: (key, v) => setDoc(doc(db, "active", key), v),
+      clearActive: (key) => deleteDoc(doc(db, "active", key)),
+      addSession: (s) => addDoc(collection(db, "sessions"), s),
+      watchSessions: (cb, err) => onSnapshot(query(collection(db, "sessions"), orderBy("start", "desc"), limit(1000)),
+        (q) => cb(q.docs.map((d) => ({ id: d.id, ...d.data() })), !q.metadata.fromCache), err),
+      watchAllActive: (cb, err) => onSnapshot(collection(db, "active"),
+        (q) => cb(q.docs.map((d) => ({ key: d.id, ...d.data() })), !q.metadata.fromCache), err),
+    };
+  }
+
+  const cfg = window.FIREBASE_CONFIG || {};
+  const configured = !!(cfg.apiKey && cfg.projectId && !String(cfg.apiKey).startsWith("PASTE"));
+  const storeReady = (async () => {
+    if (!configured) return localStore();
+    try {
+      const [{ initializeApp }, fs] = await Promise.all([import(FB + "firebase-app.js"), import(FB + "firebase-firestore.js")]);
+      return firestoreStore(fs, fs.getFirestore(initializeApp(cfg)));
+    } catch (e) {
+      console.error("Firebase failed to load", e);
+      return localStore();
+    }
+  })();
+
+  /* ---------- state ---------- */
+  let store = null, me = null, active = null, sessions = [], team = null;
+  let activeReady = false, sessionsReady = false, busy = false;
+  const filters = { team: LS.get("wc.f.team", "everyone"), log: LS.get("wc.f.log", "everyone") };
+  let person = "all";
+  const SORTS = ["newest", "oldest", "longest", "shortest"];
+  const sorts = { team: LS.get("wc.s.team", "newest"), log: LS.get("wc.s.log", "newest") };
+  if (!SORTS.includes(sorts.team)) sorts.team = "newest";
+  if (!SORTS.includes(sorts.log)) sorts.log = "newest";
+  let unsubs = [], loadTimer = null, tick = null;
+
+  const banner = (msg) => { const b = $("#banner"); b.textContent = msg || ""; b.classList.toggle("hidden", !msg); };
+  const appErr = (msg) => { $("#appErr").textContent = msg || ""; };
+  const errMsg = (e) => e && (e.code === "resource-exhausted") ? "The database's free daily limit has been reached. It resets tomorrow."
+    : e && e.code === "permission-denied" ? "The database refused this save. Check that the security rules from the setup guide are published."
+    : "Couldn't save just now — please try again.";
+
+  /* ---------- login ---------- */
+  async function login(name) {
+    name = name.trim();
+    if (!name) { $("#loginErr").textContent = "Please enter a username."; return; }
+    $("#loginErr").textContent = ""; $("#loginBtn").disabled = true; $("#loginBtn").textContent = "Connecting…";
+    store = await storeReady;
+    me = { name, key: userKey(name) };
+    LS.set("wc.currentUser", name);
+    $("#whoName").textContent = name;
+    $("#who").classList.remove("hidden");
+    $("#loginView").classList.add("hidden");
+    $("#appView").classList.remove("hidden");
+    $("#storageNote").textContent = store.kind === "db"
+      ? "Sessions are shared with everyone who uses this link."
+      : "Sessions are saved in this browser only.";
+    if (store.kind !== "db") banner(configured
+      ? "Couldn't connect to the shared database, so time is only being saved in this browser. Check your connection and reload."
+      : "Setup needed: the Firebase settings haven't been added to this page yet, so time is only being saved in this browser.");
+    $("#loginBtn").disabled = false; $("#loginBtn").textContent = "Log in";
+    activeReady = sessionsReady = false; active = null; sessions = [];
+    render();
+
+    clearTimeout(loadTimer);
+    loadTimer = setTimeout(() => { if (!activeReady || !sessionsReady) banner("Can't reach your saved data yet — it will load as soon as the connection returns."); }, 10000);
+    const settle = () => { if (activeReady && sessionsReady) { clearTimeout(loadTimer); if (store.kind === "db") banner(""); } };
+    const onErr = () => { clearTimeout(loadTimer); banner("Lost connection to saved data. Reload the page to reconnect."); };
+
+    unsubs.push(store.watchActive(me.key, (a, confirmed) => {
+      active = a; if (confirmed || store.kind === "local") activeReady = true; else activeReady = activeReady || a !== null;
+      settle(); render();
+    }, onErr));
+    unsubs.push(store.watchSessions((list, confirmed) => {
+      sessions = list; if (confirmed || list.length) sessionsReady = true; settle(); render();
+    }, onErr));
+
+    unsubs.push(store.watchAllActive((list) => { team = list; renderTeam(); renderLog(); renderTime(); }, onErr));
+
+    clearInterval(tick);
+    let n = 0;
+    tick = setInterval(() => {
+      renderTime();
+      if (++n % 20 === 0) { // every 5 s
+        if (sorts.team === "longest" || sorts.team === "shortest") renderTeam();
+        if (sorts.log === "longest" || sorts.log === "shortest") renderLog();
+        renderTime();
+      }
+    }, 250);
+  }
+
+  function logout() {
+    unsubs.forEach((u) => { try { u(); } catch {} }); unsubs = [];
+    clearInterval(tick); clearTimeout(loadTimer); banner(""); appErr("");
+    me = null; active = null; sessions = []; team = null;
+    LS.del("wc.currentUser");
+    document.title = "Work Clock";
+    $("#who").classList.add("hidden");
+    $("#appView").classList.add("hidden");
+    $("#loginView").classList.remove("hidden");
+    $("#username").value = ""; $("#username").focus();
+  }
+
+  /* ---------- clock actions ---------- */
+  const elapsed = (a, now = Date.now()) => a ? a.accMs + (a.runningSince ? now - a.runningSince : 0) : 0;
+
+  async function saveActive(next) {
+    const prev = active; active = next; render(); busy = true; appErr("");
+    try { await store.saveActive(me.key, next); }
+    catch (e) { active = prev; render(); appErr(errMsg(e)); }
+    finally { busy = false; render(); }
+  }
+
+  function onClock() {
+    if (busy || !activeReady || !me) return;
+    const now = Date.now();
+    if (!active) {
+      const title = $("#title").value.trim();
+      if (!title) { openNameDialog(); return; }
+      saveActive({ name: me.name, title, sessionStart: now, accMs: 0, runningSince: now, pausedAt: null });
+    }
+    else if (active.runningSince) saveActive({ ...active, accMs: active.accMs + (now - active.runningSince), runningSince: null, pausedAt: now });
+    else saveActive({ ...active, runningSince: now, pausedAt: null });
+  }
+
+  function openNameDialog() {
+    $("#nameInput").value = ""; $("#nameErr").textContent = "";
+    $("#nameDlg").classList.remove("hidden");
+    setTimeout(() => $("#nameInput").focus(), 0);
+  }
+  function closeNameDialog() { $("#nameDlg").classList.add("hidden"); }
+  function confirmName() {
+    const t = $("#nameInput").value.trim();
+    if (!t) { $("#nameErr").textContent = "Please enter a session title to start the clock."; $("#nameInput").focus(); return; }
+    $("#title").value = t; closeNameDialog(); onClock();
+  }
+  // Renaming an active session saves once, when the field is committed.
+  async function onTitleCommit() {
+    if (!active || busy) return;
+    const t = $("#title").value.trim();
+    if (!t) { $("#title").value = active.title || ""; return; }
+    if (t !== active.title) await saveActive({ ...active, title: t });
+  }
+
+  async function onStop() {
+    if (busy || !active || active.runningSince) return;
+    const end = active.pausedAt || Date.now();
+    const s = {
+      user: me.key, name: me.name, title: String(active.title || ""), date: dayKey(active.sessionStart),
+      start: active.sessionStart, end, workedMs: active.accMs,
+      breakMs: Math.max(0, end - active.sessionStart - active.accMs),
+    };
+    busy = true; render(); appErr("");
+    try { await store.addSession(s); await store.clearActive(me.key); active = null; $("#title").value = ""; }
+    catch (e) { appErr(errMsg(e)); }
+    finally { busy = false; render(); }
+  }
+
+  /* ---------- render ---------- */
+  function renderTime() {
+    if (!me) return;
+    const ms = elapsed(active);
+    $("#time").textContent = clockFmt(ms);
+    document.title = active && active.runningSince ? `${clockFmt(ms)} · Work Clock` : active ? `Paused · Work Clock` : "Work Clock";
+    document.querySelectorAll("[data-team]").forEach((el) => {
+      const p = el.dataset.team === me.key ? active : (team || []).find((t) => t.key === el.dataset.team);
+      if (p) el.textContent = clockFmt(elapsed(p));
+    });
+  }
+
+  function render() {
+    if (!me) return;
+    const clock = $("#clock"), state = !active ? "idle" : active.runningSince ? "running" : "paused";
+    clock.className = "clock" + (state === "idle" ? "" : " " + state);
+    clock.disabled = !activeReady || busy;
+    $("#cta").textContent = !activeReady ? "Loading…" : state === "idle" ? "Start working" : state === "running" ? "Click to stop" : "Paused";
+    $("#pausedActions").classList.toggle("hidden", state !== "paused");
+    const ti = $("#title");
+    if (active && document.activeElement !== ti) ti.value = active.title || "";
+    $("#titleHint").textContent = state === "idle" ? "Name it before you start the clock." : "Click the title to rename this session.";
+    $("#resumeBtn").disabled = $("#stopBtn").disabled = busy;
+    $("#status").innerHTML = !activeReady ? "Loading your clock…"
+      : state === "idle" ? "Click the clock to start working."
+      : state === "running" ? `Working since <b>${timeFmt(active.runningSince)}</b>. Click the clock to stop.`
+      : `Clock stopped at <b>${timeFmt(active.pausedAt)}</b>. Start again, or Stop Working to log this session.`;
+    renderTeam();
+    renderTime();
+    renderLog();
+  }
+
+  const nameOf = (p) => String(p.name || String(p.key || p.user || "").replace(/^u_/, ""));
+  const avatar = (name) => `<div class="avatar">${esc(name.charAt(0).toUpperCase() || "?")}</div>`;
+
+  // Everyone with a clock going, using my own local state for my row so clicks feel instant.
+  function livePeople() {
+    const people = (team || []).filter((t) => t.key !== me.key && typeof t.accMs === "number" && typeof t.sessionStart === "number");
+    if (active) people.push({ key: me.key, ...active, name: me.name });
+    return people;
+  }
+
+  const entryMs = (e) => e.live ? elapsed(e.ref) : (e.workedMs || 0);
+  function sortList(list, mode, startOf, msOf) {
+    const by = {
+      newest: (a, b) => startOf(b) - startOf(a),
+      oldest: (a, b) => startOf(a) - startOf(b),
+      longest: (a, b) => msOf(b) - msOf(a) || startOf(b) - startOf(a),
+      shortest: (a, b) => msOf(a) - msOf(b) || startOf(b) - startOf(a),
+    }[mode];
+    return list.sort(by);
+  }
+  const titleHtml = (t, cls = "stitle") => t ? `<div class="${cls}">${esc(t)}</div>` : `<div class="${cls} untitled">Untitled session</div>`;
+
+  function syncSeg(name) {
+    document.querySelectorAll(`[data-seg="${name}"] button`).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === filters[name])));
+  }
+
+  function renderTeam() {
+    if (!me) return;
+    syncSeg("team");
+    const f = filters.team;
+    if (f === "hide") { $("#teamMeta").textContent = ""; $("#team").innerHTML = `<div class="hidden-note">Hidden. Choose Me or Everyone to show it.</div>`; return; }
+    if (!team && store && store.kind === "db" && !active) { $("#team").innerHTML = `<div class="card empty">Checking who's working…</div>`; return; }
+    let people = livePeople();
+    if (f === "me") people = people.filter((p) => p.key === me.key);
+    $("#teamSort").value = sorts.team;
+    sortList(people, sorts.team, (p) => p.sessionStart, (p) => elapsed(p));
+    const working = people.filter((p) => p.runningSince).length, onBreak = people.length - working;
+    $("#teamMeta").textContent = people.length ? `${working} working${onBreak ? ` · ${onBreak} on break` : ""}` : "";
+    if (!people.length) {
+      $("#team").innerHTML = `<div class="card empty">${f === "me" ? "You're not clocked in. Click the clock to start." : "Nobody is clocked in right now."}</div>`;
+      return;
+    }
+    $("#team").innerHTML = `<div class="card team">` + people.map((p) => {
+      const st = p.runningSince ? "running" : "paused", name = nameOf(p);
+      const you = p.key === me.key ? ` <small>(you)</small>` : "";
+      const detail = p.runningSince ? `Working · since ${timeFmt(p.runningSince)}` : `On break · stopped at ${timeFmt(p.pausedAt || p.sessionStart)}`;
+      return `<div class="person ${st}">${avatar(name)}
+        <div><div class="pname">${esc(name)}${you}</div>${titleHtml(p.title, "pstitle")}<div class="pstate"><span class="dot"></span>${esc(detail)}</div></div>
+        <span class="dur" data-team="${esc(p.key)}">${clockFmt(elapsed(p))}</span></div>`;
+    }).join("") + `</div>`;
+  }
+
+  function renderPersonSelect(entries) {
+    const sel = $("#personSel");
+    const show = filters.log === "everyone";
+    sel.classList.toggle("hidden", !show);
+    if (!show) return;
+    const names = new Map();
+    entries.forEach((e) => { if (!names.has(e.user)) names.set(e.user, nameOf(e)); });
+    if (person !== "all" && !names.has(person)) person = "all";
+    const opts = [["all", "All people"], ...[...names].sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([k, n]) => [k, k === me.key ? `${n} (you)` : n])];
+    const html = opts.map(([k, n]) => `<option value="${esc(k)}"${k === person ? " selected" : ""}>${esc(n)}</option>`).join("");
+    if (sel.innerHTML !== html) sel.innerHTML = html;
+  }
+
+  function renderLog() {
+    if (!me) return;
+    syncSeg("log");
+    $("#logSort").value = sorts.log;
+    const f = filters.log;
+    $("#logSort").classList.toggle("hidden", f === "hide");
+    if (f === "hide") {
+      $("#personSel").classList.add("hidden"); $("#logMeta").textContent = "";
+      $("#log").innerHTML = `<div class="hidden-note">Hidden. Choose Me or Everyone to show it.</div>`; return;
+    }
+    // Logged sessions + clocks that are still going.
+    let entries = sessions.filter((s) => s && s.user && typeof s.start === "number").map((s) => ({ ...s, live: false }));
+    livePeople().forEach((p) => entries.push({ live: true, ref: p, user: p.key, name: p.name, title: p.title, start: p.sessionStart, date: dayKey(p.sessionStart), paused: !p.runningSince }));
+    renderPersonSelect(entries);
+    if (f === "me") entries = entries.filter((e) => e.user === me.key);
+    else if (person !== "all") entries = entries.filter((e) => e.user === person);
+
+    const logged = entries.filter((e) => !e.live).length;
+    if (!entries.length) {
+      $("#logMeta").textContent = "";
+      $("#log").innerHTML = `<div class="card empty">${!sessionsReady ? "Loading sessions…" : f === "me" || person === me.key
+        ? "No work logged yet. When you click <b>Stop Working</b>, the session shows up here." : "No work logged yet."}</div>`;
+      return;
+    }
+
+    // Number each person's sessions within a day, in the order they started.
+    const counter = {};
+    [...entries].sort((a, b) => a.start - b.start).forEach((e) => { const k = e.date + "|" + e.user; counter[k] = (counter[k] || 0) + 1; e.n = counter[k]; });
+
+    const mode = sorts.log, showNames = f === "everyone";
+    const sortLabel = { newest: "newest first", oldest: "oldest first", longest: "longest first", shortest: "shortest first" }[mode];
+    $("#logMeta").textContent = `${logged} logged session${logged === 1 ? "" : "s"} · ${sortLabel}`;
+
+    if (mode === "longest" || mode === "shortest") {
+      // Ranked across all days, so each row carries its date.
+      sortList(entries, mode, (e) => e.start, entryMs);
+      $("#log").innerHTML = `<section class="card day">${entries.map((e) => sessionRow(e, showNames, true)).join("")}</section>`;
+      return;
+    }
+    const byDay = {};
+    entries.forEach((e) => (byDay[e.date] = byDay[e.date] || []).push(e));
+    const days = Object.keys(byDay).sort(); if (mode === "newest") days.reverse();
+    $("#log").innerHTML = days.map((d) => {
+      const list = sortList(byDay[d], mode, (e) => e.start, entryMs);
+      const people = new Set(list.map((e) => e.user)).size;
+      const count = `${list.length} session${list.length === 1 ? "" : "s"}` + (showNames && people > 1 ? ` · ${people} people` : "");
+      return `<section class="card day"><div class="day-title"><h3>${esc(dayLabel(d))}</h3><span class="count">${count}</span></div>${list.map((e) => sessionRow(e, showNames, false)).join("")}</section>`;
+    }).join("");
+  }
+
+  function sessionRow(e, showNames, withDate) {
+    const name = nameOf(e), mine = e.user === me.key;
+    const label = `Session ${e.n}` + (e.live ? ` · ${e.paused ? "On break" : "In progress"}` : "");
+    const day = withDate ? `${dayLabel(e.date).split(" · ")[0]} · ` : "";
+    const detail = e.live
+      ? `${day}Started ${timeFmt(e.start)} · ${e.paused ? (mine ? "not logged yet, press Stop Working" : "clock stopped, not logged yet") : "clock is running"}`
+      : `${day}${timeFmt(e.start)} – ${timeFmt(e.end)}${e.breakMs >= 60000 ? ` · ${durFmt(e.breakMs)} on break` : ""}`;
+    const dur = e.live ? `<span class="dur" data-team="${esc(e.user)}">${clockFmt(entryMs(e))}</span>`
+      : `<span class="dur">${clockFmt(e.workedMs)}</span>`;
+    const liveCls = e.live ? ` live${e.paused ? " paused" : ""}` : "";
+    const body = `${titleHtml(e.title)}<div class="range"><small>${esc(detail)}</small></div>`;
+    if (!showNames) return `<div class="sess${liveCls}"><span class="tag">${label}</span><div>${body}</div>${dur}</div>`;
+    return `<div class="sess feed-row${liveCls}">${avatar(name)}
+      <div><div class="who-line"><button class="linkish" data-person="${esc(e.user)}">${esc(name)}${mine ? " (you)" : ""}</button><span class="tag">${label}</span></div>
+      ${body}</div>${dur}</div>`;
+  }
+
+  /* ---------- wire up ---------- */
+  $("#loginView").addEventListener("submit", (e) => { e.preventDefault(); login($("#username").value); });
+  $("#logout").addEventListener("click", logout);
+  $("#clock").addEventListener("click", onClock);
+  $("#resumeBtn").addEventListener("click", onClock);
+  $("#stopBtn").addEventListener("click", onStop);
+
+  document.querySelectorAll("[data-seg]").forEach((g) => g.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-v]"); if (!b) return;
+    filters[g.dataset.seg] = b.dataset.v; LS.set("wc.f." + g.dataset.seg, b.dataset.v);
+    if (g.dataset.seg === "log" && b.dataset.v !== "everyone") person = "all";
+    g.dataset.seg === "team" ? renderTeam() : renderLog(); renderTime();
+  }));
+  ["team", "log"].forEach((k) => $("#" + k + "Sort").addEventListener("change", (e) => {
+    sorts[k] = e.target.value; LS.set("wc.s." + k, sorts[k]); k === "team" ? renderTeam() : renderLog(); renderTime();
+  }));
+  $("#nameForm").addEventListener("submit", (e) => { e.preventDefault(); confirmName(); });
+  $("#nameCancel").addEventListener("click", closeNameDialog);
+  $("#nameDlg").addEventListener("click", (e) => { if (e.target.id === "nameDlg") closeNameDialog(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#nameDlg").classList.contains("hidden")) closeNameDialog(); });
+  $("#title").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); if (active) $("#title").blur(); else onClock(); } });
+  $("#title").addEventListener("change", onTitleCommit);
+  $("#personSel").addEventListener("change", (e) => { person = e.target.value; renderLog(); renderTime(); });
+  $("#log").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-person]"); if (!b) return;
+    person = b.dataset.person; renderLog(); renderTime();
+    $("#personSel").scrollIntoView({ block: "nearest", behavior: "smooth" });
+  });
+
+  const sun = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  const moon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+  function paintThemeBtn() {
+    const dark = document.documentElement.getAttribute("data-theme") === "dark";
+    $("#themeBtn").innerHTML = dark ? sun : moon;
+    $("#themeBtn").setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
+    $("#themeBtn").title = dark ? "Light mode" : "Dark mode";
+  }
+  $("#themeBtn").addEventListener("click", () => {
+    const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next); LS.set("wc.theme", next); paintThemeBtn();
+  });
+  paintThemeBtn();
+
+  window.addEventListener("storage", (e) => { if (store && store.refresh && e.key && e.key.startsWith("wc.")) store.refresh(); });
+
+  const remembered = LS.get("wc.currentUser", null);
+  if (remembered) login(remembered);
+})();
+</script>
+</body>
+</html>
